@@ -141,4 +141,31 @@ describe("allocation service approval", () => {
     expect(second.approvedRequests).toBe(1);
     expect(insertApprovedAllocations).toHaveBeenCalledTimes(2);
   });
+
+  it("only recommends pending and partially allocated requests", async () => {
+    findRequestsForScoring.mockResolvedValue([
+      requestRows[0],
+      {
+        ...requestRows[0],
+        id: "req_partial",
+        status: "partially_allocated",
+        request_items: [{ item: "water", qty_needed: 300, qty_allocated: 100 }],
+      },
+      {
+        ...requestRows[0],
+        id: "req_transit",
+        status: "in_transit",
+      },
+      {
+        ...requestRows[0],
+        id: "req_delivered",
+        status: "delivered",
+      },
+    ]);
+
+    const plan = await generateAllocation({});
+    const requestIds = new Set(plan.rows.map((row) => row.requestId));
+
+    expect(requestIds).toEqual(new Set(["req_01", "req_partial"]));
+  });
 });

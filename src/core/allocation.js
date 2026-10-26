@@ -146,6 +146,48 @@ function makeReason({ item, qty, need, depot, distanceKm, limited, blocked, trip
   return `${label}: ${qty} of ${need} (${pct}%). ${depot.name} is nearest (${Math.round(distanceKm)} km). ${limits.join(" ")}`;
 }
 
+function findAllocationBlocker(depots, item, targetQty) {
+  const stocked = depots.filter(
+    (depot) => (depot.stock.find((entry) => entry.item === item)?.qty ?? 0) > 0,
+  );
+  if (stocked.length === 0) {
+    return {
+      blockerCode: "NO_STOCK",
+      reason: `No ${item} stock is currently available at any depot.`,
+    };
+  }
+
+  const withinCapacity = stocked.filter((depot) => depot.remainingCapacity > 0);
+  if (withinCapacity.length === 0) {
+    return {
+      blockerCode: "NO_DEPOT_CAPACITY",
+      reason: "All stocked depots have reached their daily dispatch capacity.",
+    };
+  }
+
+  const withVehicle = withinCapacity.filter((depot) =>
+    depot.vehicles.some((vehicle) => vehicle.status === "available"),
+  );
+  if (withVehicle.length === 0) {
+    return {
+      blockerCode: "NO_AVAILABLE_VEHICLE",
+      reason: "Stock is available, but no truck is currently available for dispatch.",
+    };
+  }
+
+  if (targetQty <= 0) {
+    return {
+      blockerCode: "PRIORITY_SHARE_UNAVAILABLE",
+      reason: "Available resources were assigned to higher-priority needs in this plan.",
+    };
+  }
+
+  return {
+    blockerCode: "NO_USABLE_DEPOT",
+    reason: `No depot can currently dispatch ${item} for this request.`,
+  };
+}
+
 export function buildAllocationRows(
   { requests, depots, blocks = [] },
   { strategy = "priority", idFactory = () => `alc_${randomUUID()}` } = {},
@@ -225,6 +267,7 @@ export function buildAllocationRows(
           depotId: candidate.depot.id,
           depotName: candidate.depot.name,
           vehicleId: candidate.vehicle.id,
+          vehicleName: candidate.vehicle.name ?? candidate.vehicle.id,
           item,
           qty,
           qtyNeeded: need,
@@ -247,6 +290,7 @@ export function buildAllocationRows(
       }
 
       if (allocated === 0) {
+        const blocker = findAllocationBlocker(workingDepots, item, targets.get(request.id) ?? 0);
         rows.push({
           id: idFactory(),
           requestId: request.id,
@@ -254,6 +298,7 @@ export function buildAllocationRows(
           depotId: null,
           depotName: "No depot available",
           vehicleId: null,
+          vehicleName: null,
           item,
           qty: 0,
           qtyNeeded: need,
@@ -262,7 +307,8 @@ export function buildAllocationRows(
           distanceKm: null,
           etaMin: null,
           status: "recommended",
-          reason: `No usable ${item} stock, depot capacity, or available vehicle.`,
+          blockerCode: blocker.blockerCode,
+          reason: blocker.reason,
         });
       }
     }

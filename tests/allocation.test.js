@@ -71,6 +71,7 @@ describe("allocation engine", () => {
       blocks: [],
     });
     expect(result.summary.totalAllocated).toBe(250);
+    expect(result.rows[0].vehicleName).toBe("Truck 1");
 
     const noVehicle = buildAllocationRows({
       requests: [request()],
@@ -78,7 +79,8 @@ describe("allocation engine", () => {
       blocks: [],
     });
     expect(noVehicle.summary.totalAllocated).toBe(0);
-    expect(noVehicle.rows[0].reason).toContain("available vehicle");
+    expect(noVehicle.rows[0].blockerCode).toBe("NO_AVAILABLE_VEHICLE");
+    expect(noVehicle.rows[0].reason).toContain("no truck is currently available");
   });
 
   it("adds a blocked-zone distance penalty and creates a baseline", () => {

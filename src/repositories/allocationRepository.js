@@ -26,7 +26,8 @@ export async function findSavedAllocations() {
       reason,
       status,
       requests (area, request_items(item, qty_needed, qty_allocated)),
-      depots (name)
+      depots (name),
+      vehicles (name)
     `)
     .order("created_at", { ascending: true });
   return unwrapSupabaseResult(result, "read saved allocations");

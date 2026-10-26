@@ -23,6 +23,7 @@ import {
 } from "../validators/allocationValidator.js";
 
 let pendingPlan = null;
+const ALLOCATION_ELIGIBLE_STATUSES = new Set(["pending", "partially_allocated"]);
 
 function mapBlock(row) {
   return {
@@ -44,17 +45,19 @@ export async function getPlanningContext() {
       findActiveRoadBlocks(),
     ]);
   const blocks = blockRows.map(mapBlock);
-  const adjustedRows = requestRows.map((row) => ({
-    ...row,
-    accessibility: blocks.some((block) => {
-      const latKm = (row.lat - block.lat) * 111;
-      const lngKm =
-        (row.lng - block.lng) * 111 * Math.cos((block.lat * Math.PI) / 180);
-      return Math.hypot(latKm, lngKm) <= block.radiusKm;
-    })
-      ? "hard"
-      : row.accessibility,
-  }));
+  const adjustedRows = requestRows
+    .filter((row) => ALLOCATION_ELIGIBLE_STATUSES.has(row.status))
+    .map((row) => ({
+      ...row,
+      accessibility: blocks.some((block) => {
+        const latKm = (row.lat - block.lat) * 111;
+        const lngKm =
+          (row.lng - block.lng) * 111 * Math.cos((block.lat * Math.PI) / 180);
+        return Math.hypot(latKm, lngKm) <= block.radiusKm;
+      })
+        ? "hard"
+        : row.accessibility,
+    }));
 
   return {
     requests: scoreAndSortRequests(adjustedRows, weights, { timeOffsetHours }),
@@ -224,6 +227,7 @@ export function mapSavedAllocationRows(rows) {
   return rows.map((row) => {
     const request = Array.isArray(row.requests) ? row.requests[0] : row.requests;
     const depot = Array.isArray(row.depots) ? row.depots[0] : row.depots;
+    const vehicle = Array.isArray(row.vehicles) ? row.vehicles[0] : row.vehicles;
     const items = request?.request_items ?? [];
     const requestItem = items.find((entry) => entry.item === row.item);
     const qtyNeeded = requestItem?.qty_needed ?? row.qty;
@@ -235,6 +239,7 @@ export function mapSavedAllocationRows(rows) {
       depotId: row.depot_id,
       depotName: depot?.name ?? "Unknown depot",
       vehicleId: row.vehicle_id,
+      vehicleName: vehicle?.name ?? row.vehicle_id,
       item: row.item,
       qty: row.qty,
       qtyNeeded,
